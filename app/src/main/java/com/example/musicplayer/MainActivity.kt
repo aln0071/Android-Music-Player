@@ -1,14 +1,14 @@
 package com.example.musicplayer
 
-import android.content.Context
 import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Bundle
-import android.os.Environment
 import android.util.Log
 import android.view.GestureDetector
 import android.view.GestureDetector.SimpleOnGestureListener
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
@@ -18,25 +18,6 @@ import androidx.navigation.ui.setupWithNavController
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import java.io.File
 
-internal class GestureTap : SimpleOnGestureListener() {
-    override fun onDoubleTap(e: MotionEvent): Boolean {
-        Log.i("onDoubleTap :", "" + e.action)
-        System.out.println("double tap")
-        return true
-    }
-
-    override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-        Log.i("onSingleTap :", "" + e.action)
-        System.out.println("Single Tap")
-        return true
-    }
-
-//    override fun onScroll(e1: MotionEvent?, e2: MotionEvent?, distanceX: Float, distanceY: Float): Boolean {
-//        System.out.println("x: "+ distanceX.toInt() +" y: "+ distanceY.toInt())
-//        return super.onScroll(e1, e2, distanceX, distanceY)
-//    }
-}
-
 class MainActivity : AppCompatActivity() {
 
     private var mediaPlayer: MediaPlayer? = null
@@ -44,6 +25,33 @@ class MainActivity : AppCompatActivity() {
     private var x2 = 0.0;
     private var minDistance = 150;
     private var detector:GestureDetector? = null
+    private var songs = arrayOf<File>()
+    private var songIndex = 0;
+
+    private fun playSong() {
+        mediaPlayer?.reset()
+        mediaPlayer?.setDataSource(this.songs[this.songIndex].absolutePath)
+        mediaPlayer?.prepare()
+        mediaPlayer?.start()
+        val textView = findViewById<TextView>(R.id.text_home)
+        textView.text = this.songs[this.songIndex].name
+    }
+
+    private fun playNextSong() {
+        this.songIndex++;
+        if(this.songs.size <= this.songIndex) {
+            this.songIndex = 0;
+        }
+        this.playSong()
+    }
+
+    private fun playPreviousSong() {
+        this.songIndex--;
+        if(this.songIndex < 0) {
+            this.songIndex = this.songs.size-1;
+        }
+        this.playSong();
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,23 +66,16 @@ class MainActivity : AppCompatActivity() {
         setupActionBarWithNavController(navController, appBarConfiguration)
         navView.setupWithNavController(navController)
 
-        val mydir: File = this.getDir("users", Context.MODE_PRIVATE) //Creating an internal dir;
-
-        if (!mydir.exists()) {
-            mydir.mkdirs()
-            Log.d("path finder", "creating directory")
-        } else {
-            Log.d("path finder", "dir exists")
-            Log.d("path finder", mydir.absolutePath)
-            Log.d("path finder", Environment.getDataDirectory().toString())
-            Log.d("path finder", filesDir.absolutePath)
-            Log.d("path finder", getExternalFilesDir("media").toString())
+        val mediadir = getExternalFilesDir("media")
+        this.songs = mediadir?.listFiles()!!
+        if(this.songs.isNotEmpty()) {
+            this.mediaPlayer = MediaPlayer.create(this, Uri.fromFile(this.songs[songIndex]))
+            for(f:File in this.songs) {
+                Log.d("fileslist", f.name)
+            }
         }
 
         detector = GestureDetector(this, GestureTap())
-
-//        var songUri = Uri.fromFile(externalCacheDir)
-        mediaPlayer = MediaPlayer.create(this, R.raw.song)
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
@@ -99,6 +100,7 @@ class MainActivity : AppCompatActivity() {
 //                    Log.d("path finder", externalCacheDir?.absolutePath!!)
                     Log.d("path finder", "")
                     Toast.makeText(this, "left2right swipe " + deltaX, Toast.LENGTH_SHORT).show()
+                    this.playSong()
                 } else if (deltaX < -minDistance) {
                     // consider as something else - a screen tap for example
                     Toast.makeText(this, "right to left swipe " + deltaX, Toast.LENGTH_SHORT).show()
@@ -106,6 +108,62 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return super.onTouchEvent(event)
+    }
+
+    inner class GestureTap : SimpleOnGestureListener() {
+        private val SWIPE_THRESHOLD = 100
+        private val SWIPE_VELOCITY_THRESHOLD = 100
+
+        override fun onDoubleTap(e: MotionEvent): Boolean {
+            Log.i("onDoubleTap :", "" + e.action)
+            System.out.println("double tap")
+            return true
+        }
+
+        override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+            Log.i("onSingleTap :", "" + e.action)
+            System.out.println("Single Tap")
+            playSong()
+            return true
+        }
+
+        override fun onScroll(e1: MotionEvent?, e2: MotionEvent?, distanceX: Float, distanceY: Float): Boolean {
+            System.out.println("x: " + distanceX.toInt() + " y: " + distanceY.toInt())
+            return super.onScroll(e1, e2, distanceX, distanceY)
+        }
+
+        override fun onDown(e: MotionEvent?): Boolean {
+            return true
+        }
+
+        override fun onFling(e1: MotionEvent, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+            var result = false
+            try {
+                val diffY = e2.y - e1.y
+                val diffX = e2.x - e1.x
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                        if (diffX > 0) {
+                            playNextSong()
+                            Log.d("swipe", "next song")
+                        } else {
+                            playPreviousSong()
+                        }
+                        result = true
+                    }
+                } else if (Math.abs(diffY) > SWIPE_THRESHOLD && Math.abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
+                    if (diffY > 0) {
+//                        onSwipeBottom()
+                    } else {
+//                        onSwipeTop()
+                    }
+                    result = true
+                }
+            } catch (exception: Exception) {
+                exception.printStackTrace()
+            }
+            return result
+        }
     }
 
 }
