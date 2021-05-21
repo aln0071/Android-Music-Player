@@ -17,6 +17,7 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import java.io.File
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
 
@@ -33,24 +34,28 @@ class MainActivity : AppCompatActivity() {
         mediaPlayer?.setDataSource(this.songs[this.songIndex].absolutePath)
         mediaPlayer?.prepare()
         mediaPlayer?.start()
-        val textView = findViewById<TextView>(R.id.text_home)
-        textView.text = this.songs[this.songIndex].name
     }
 
-    private fun playNextSong() {
+    private fun updateSongName() {
+        findViewById<TextView>(R.id.text_home).text = this.songs[this.songIndex].name
+    }
+
+    private fun switchToNextSong() {
+        this.mediaPlayer?.stop()
         this.songIndex++;
         if(this.songs.size <= this.songIndex) {
             this.songIndex = 0;
         }
-        this.playSong()
+        this.updateSongName()
     }
 
-    private fun playPreviousSong() {
+    private fun switchToPreviousSong() {
+        this.mediaPlayer?.stop()
         this.songIndex--;
         if(this.songIndex < 0) {
             this.songIndex = this.songs.size-1;
         }
-        this.playSong();
+        this.updateSongName()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,6 +73,9 @@ class MainActivity : AppCompatActivity() {
 
         val mediadir = getExternalFilesDir("media")
         this.songs = mediadir?.listFiles()!!
+        // sort array
+        this.songs.sortWith { object1, object2 -> object1.name.compareTo(object2.name) }
+
         if(this.songs.isNotEmpty()) {
             this.mediaPlayer = MediaPlayer.create(this, Uri.fromFile(this.songs[songIndex]))
             for(f:File in this.songs) {
@@ -78,35 +86,28 @@ class MainActivity : AppCompatActivity() {
         detector = GestureDetector(this, GestureTap())
     }
 
+    override fun onResume() {
+        super.onResume()
+        this.updateSongName();
+    }
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN){
             // Do something
             mediaPlayer?.pause()
         }
-        if(keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+        if(keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_HEADSETHOOK) {
             mediaPlayer?.start()
         }
         return super.onKeyDown(keyCode, event)
     }
 
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         detector?.onTouchEvent(event)
-        when (event!!.action) {
-            MotionEvent.ACTION_DOWN -> x1 = event!!.x.toDouble()
-            MotionEvent.ACTION_UP -> {
-                x2 = event!!.x.toDouble()
-                val deltaX = (x2 - x1).toFloat()
-                if (deltaX > minDistance) {
-//                    Log.d("path finder", externalCacheDir?.absolutePath!!)
-                    Log.d("path finder", "")
-                    Toast.makeText(this, "left2right swipe " + deltaX, Toast.LENGTH_SHORT).show()
-                    this.playSong()
-                } else if (deltaX < -minDistance) {
-                    // consider as something else - a screen tap for example
-                    Toast.makeText(this, "right to left swipe " + deltaX, Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
         return super.onTouchEvent(event)
     }
 
@@ -127,11 +128,6 @@ class MainActivity : AppCompatActivity() {
             return true
         }
 
-        override fun onScroll(e1: MotionEvent?, e2: MotionEvent?, distanceX: Float, distanceY: Float): Boolean {
-            System.out.println("x: " + distanceX.toInt() + " y: " + distanceY.toInt())
-            return super.onScroll(e1, e2, distanceX, distanceY)
-        }
-
         override fun onDown(e: MotionEvent?): Boolean {
             return true
         }
@@ -144,10 +140,11 @@ class MainActivity : AppCompatActivity() {
                 if (Math.abs(diffX) > Math.abs(diffY)) {
                     if (Math.abs(diffX) > SWIPE_THRESHOLD && Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
                         if (diffX > 0) {
-                            playNextSong()
-                            Log.d("swipe", "next song")
+                            switchToPreviousSong()
+                            showToast("previous song")
                         } else {
-                            playPreviousSong()
+                            switchToNextSong()
+                            showToast("next song")
                         }
                         result = true
                     }
